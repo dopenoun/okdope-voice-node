@@ -1,25 +1,31 @@
-from fastapi import FastAPI, Request
-from pydantic import BaseModel
-from app.gpt_handler import get_ayatori_response
-from app.elevenlabs_handler import speak_response
-from app.memory import log_interaction
+import subprocess
+import json
 import os
+from app.gpt_handler import get_gpt_response
+from app.elevenlabs_handler import speak_text
+from app.memory import save_to_memory
 
-app = FastAPI()
+# 🔓 Unlock the vault from envdrop
+subprocess.run(["python3", "envdrop.py", "unlock"], cwd="../envdrop")
 
-VOICE_ID = os.getenv("VOICE_ID")
+# 🧠 Load the ritual configuration
+with open(".ritual.json", "r") as f:
+    ritual = json.load(f)
 
-class TranscriptionPayload(BaseModel):
-    text: str
-    participant: str = "unknown"
+print(f"🔮 Ritual '{ritual['name']}' invoked: {ritual['invocation_phrase']}")
 
-@app.post("/webhook")
-async def handle_webhook(payload: TranscriptionPayload):
-    user_text = payload.text
-    participant = payload.participant
+# 🌬️ Greet the user with the voice
+speak_text(f"{ritual['invocation_phrase']} I am here.", voice_id=ritual["voice_profile"])
 
-    response_text = get_ayatori_response(user_text, participant)
-    log_interaction(participant, user_text, response_text)
-    speak_response(response_text, VOICE_ID)
-
-    return {"status": "ok", "response": response_text}
+# 🔁 Main interaction loop
+try:
+    while True:
+        user_input = input("You: ")
+        if user_input.lower() in ["exit", "quit"]:
+            speak_text("Goodbye. The ritual ends.", voice_id=ritual["voice_profile"])
+            break
+        response = get_gpt_response(user_input)
+        speak_text(response, voice_id=ritual["voice_profile"])
+        save_to_memory(user_input, response)
+except KeyboardInterrupt:
+    speak_text("Ritual interrupted. Farewell.", voice_id=ritual["voice_profile"])
